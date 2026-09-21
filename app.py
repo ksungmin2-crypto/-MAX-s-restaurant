@@ -1,227 +1,107 @@
 import streamlit as st
-import requests
 import pandas as pd
-from bs4 import BeautifulSoup
-from urllib.parse import urljoin
+from datetime import date
+import io
 
-st.set_page_config(
-    page_title="MAX's restaurant",
-    page_icon="🔒",
-    layout="wide"
-)
+# 페이지 기본 설정
+st.set_page_config(page_title="F1P — 툴 사용", layout="wide")
 
-# =========================
-# 로그인 상태 저장
-# =========================
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
+st.title("F1P — 툴 사용")
 
+# 상단 탭/버튼 메뉴
+tool_tabs = [
+    "☆ 데이터 다운로드", "☆ 이미지 URL 다운로드", "☆ 전체 URL 크롤링", 
+    "☆ 매입 이미지 다운로드", "☆ 사내판매 썸네일", "☆ 가격/재고 조회", 
+    "☆ 이미지 비교 (테스트)", "☆ 이미지 비교 2 (테스트)", "☆ 이미지 비교 3 (테스트)", 
+    "☆ 누끼 따기", "☆ 구글시트 데이터", "☆ 품번 등록확인", "☆ 판매 상품 검색"
+]
 
-# =========================
-# 로그인 화면
-# =========================
-if not st.session_state.logged_in:
+selected_tab = st.radio("기능 선택", tool_tabs, horizontal=True, label_visibility="collapsed")
 
-    st.title("🔒 MAX's restaurant")
-    st.write("주인장 마음대로 판매합니다.")
+st.markdown("---")
 
-    password = st.text_input(
-        "오늘의 메뉴는?",
-        type="password"
-    )
+if selected_tab == "☆ 데이터 다운로드":
+    st.subheader("데이터 다운로드")
+    st.caption("Redash 쿼리를 실행해 최신 데이터를 엑셀로 받습니다.")
 
-    if st.button("접속하기"):
+    col1, col2 = st.columns([2, 1])
 
-        if password == "1234":
-            st.session_state.logged_in = True
-            st.rerun()
-
-        else:
-            st.error("안 팔아요.")
-
-    st.stop()
-
-
-# =========================
-# 로그인 후 화면
-# =========================
-st.title("🔒 MAX's restaurant")
-st.success("맛점하세요.")
-
-
-# 로그아웃
-if st.sidebar.button("🚪 로그아웃"):
-    st.session_state.logged_in = False
-    st.rerun()
-
-
-st.write("---")
-
-st.subheader("⚙️ 크롤링 제어판")
-
-
-# =========================
-# 사이트 선택
-# =========================
-site_type = st.selectbox(
-    "어디에서 수집할까요?",
-    [
-        "일반 웹사이트",
-        "Shopify",
-        "Cafe24"
-    ]
-)
-
-
-# =========================
-# URL 입력
-# =========================
-target_url = st.text_input(
-    "수집할 사이트 주소",
-    placeholder="https://example.com"
-)
-
-
-# =========================
-# 크롤링 함수
-# =========================
-def crawl_website(url):
-
-    # http가 없으면 자동 추가
-    if not url.startswith(("http://", "https://")):
-        url = "https://" + url
-
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
-
-    response = requests.get(
-        url,
-        headers=headers,
-        timeout=15
-    )
-
-    response.raise_for_status()
-
-    soup = BeautifulSoup(
-        response.text,
-        "html.parser"
-    )
-
-    data = []
-
-    # 페이지에 있는 링크들을 찾음
-    for link in soup.find_all("a", href=True):
-
-        text = link.get_text(
-            " ",
-            strip=True
+    with col1:
+        # 1. 쿼리 선택
+        query_option = st.selectbox(
+            "쿼리 선택",
+            ["페이머스 거래내역", "상품별 재고 현황", "일별 매출 집계", "회원가입/매출 통계"],
+            index=0
         )
+        st.success("🟢 연결됨 (Redash API)")
 
-        href = link.get("href")
+        # 2. 기간 설정
+        d_col1, d_col2 = st.columns(2)
+        with d_col1:
+            start_date = st.date_input("기간 시작", value=date(2026, 1, 1))
+        with d_col2:
+            end_date = st.date_input("기간 종료", value=date(2026, 9, 21))
 
-        full_url = urljoin(
-            url,
-            href
-        )
+        # 3. 버튼 영역
+        btn_col1, btn_col2, btn_col3 = st.columns(3)
 
-        if text:
+        if "download_history" not in st.session_state:
+            st.session_state.download_history = []
 
-            data.append({
-                "텍스트": text,
-                "주소": full_url
+        if btn_col1.button("⬇️ 다운로드", use_container_width=True):
+            # 테스트용 샘플 데이터
+            data = {
+                "거래일자": ["2026-09-01", "2026-09-02", "2026-09-03"],
+                "상품명": ["상품 A", "상품 B", "상품 C"],
+                "결제금액": [15000, 32000, 28000],
+                "상태": ["완료", "완료", "취소"]
+            }
+            df = pd.DataFrame(data)
+
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, index=False, sheet_name='거래내역')
+            excel_data = output.getvalue()
+
+            st.session_state.download_history.append({
+                "time": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "query": query_option,
+                "range": f"{start_date} ~ {end_date}"
             })
 
-    return pd.DataFrame(data)
-
-
-# =========================
-# 크롤링 시작 버튼
-# =========================
-if st.button(
-    "🚀 데이터 수집 시작",
-    type="primary"
-):
-
-    if target_url == "":
-
-        st.warning(
-            "사이트 주소를 입력해주세요."
-        )
-
-    else:
-
-        progress = st.progress(
-            10,
-            text="사이트에 접속 중..."
-        )
-
-        try:
-
-            progress.progress(
-                40,
-                text="웹페이지를 읽는 중..."
+            st.download_button(
+                label="💾 엑셀 파일 받기",
+                data=excel_data,
+                file_name=f"{query_option}_{start_date}_{end_date}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
             )
 
-            df = crawl_website(
-                target_url
-            )
+        if btn_col2.button("📋 복사", use_container_width=True):
+            st.toast("클립보드 복사 기능 준비 중입니다.")
 
-            progress.progress(
-                80,
-                text="데이터를 정리하는 중..."
-            )
+        if btn_col3.button("📊 시트 뷰로 바로 보기", use_container_width=True):
+            st.write("### 📊 조회 결과 미리보기")
+            sample_data = {
+                "거래일자": ["2026-09-01", "2026-09-02", "2026-09-03"],
+                "상품명": ["상품 A", "상품 B", "상품 C"],
+                "결제금액": [15000, 32000, 28000],
+                "상태": ["완료", "완료", "취소"]
+            }
+            st.dataframe(pd.DataFrame(sample_data), use_container_width=True)
 
-            st.session_state["crawl_result"] = df
+    with col2:
+        st.subheader("다운로드 내역")
+        if st.button("🗑️ 지우기"):
+            st.session_state.download_history = []
+            st.rerun()
 
-            progress.progress(
-                100,
-                text="수집 완료!"
-            )
+        if not st.session_state.download_history:
+            st.info("내역 없음")
+        else:
+            for item in reversed(st.session_state.download_history):
+                st.text(f"[{item['time']}]\n- {item['query']}\n- {item['range']}")
+                st.markdown("---")
 
-            st.success(
-                f"총 {len(df)}개의 데이터를 가져왔습니다."
-            )
-
-        except Exception as e:
-
-            st.error(
-                f"수집 실패: {e}"
-            )
-
-
-# =========================
-# 결과 화면
-# =========================
-if "crawl_result" in st.session_state:
-
-    df = st.session_state["crawl_result"]
-
-    st.write("---")
-
-    st.subheader("📋 수집 결과")
-
-    if df.empty:
-
-        st.info(
-            "가져온 데이터가 없습니다."
-        )
-
-    else:
-
-        st.dataframe(
-            df,
-            use_container_width=True,
-            hide_index=True
-        )
-
-        csv = df.to_csv(
-            index=False
-        ).encode("utf-8-sig")
-
-        st.download_button(
-            "📥 CSV 다운로드",
-            data=csv,
-            file_name="crawl_result.csv",
-            mime="text/csv"
-        )
+else:
+    st.info(f"[{selected_tab}] 기능 준비 중입니다.")

@@ -15,12 +15,12 @@ if "logged_in" not in st.session_state:
 # 2. 로그인 화면 처리
 # ==========================================
 if not st.session_state.logged_in:
-    st.title("🔒 로그인")
-    st.write("서비스를 이용하려면 비밀번호를 입력해주세요.")
+    st.title("🔒 MAX's restaurant")
+    st.write("오늘의 추천 메뉴는?.")
 
-    password_input = st.text_input("비밀번호", type="password")
+    password_input = st.text_input("된장찌개와 계란말이", type="password")
 
-    if st.button("로그인"):
+    if st.button("주문"):
         if password_input == USER_PASSWORD:
             st.session_state.logged_in = True
             st.success("로그인 성공!")
